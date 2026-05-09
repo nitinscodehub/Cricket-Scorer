@@ -14,27 +14,32 @@ export const formatOver = (balls: number) => {
 export const getTarget = (innings1Runs: number) => innings1Runs + 1;
 
 export const calculateMOM = (match: Match): string => {
-  const allStats: Record<string, number> = {};
-  const innings = [match.innings1, match.innings2];
+  const winner = match.winner;
+  if (!winner || winner === 'Match Tied') return 'N/A';
 
-  innings.forEach(inn => {
-    Object.values(inn.battingStats).forEach(s => {
-      const score = (s.runs * 1) + (s.fours * 0.5) + (s.sixes * 1) + (s.runs > 50 ? 5 : 0);
-      allStats[s.name] = (allStats[s.name] || 0) + score;
-    });
-    Object.values(inn.bowlingStats).forEach(s => {
-      const score = (s.wickets * 20) + (s.maidens * 10) - (s.runsConceded * 0.5);
-      allStats[s.name] = (allStats[s.name] || 0) + score;
-    });
-  });
+  const winningSquad = winner === match.teamAName ? match.teamAPlayers : match.teamBPlayers;
+  const allBatStats = { ...match.innings1.battingStats, ...match.innings2.battingStats };
+  const allBowlStats = { ...match.innings1.bowlingStats, ...match.innings2.bowlingStats };
 
   let bestPlayer = 'N/A';
   let maxScore = -Infinity;
-  for (const [name, score] of Object.entries(allStats)) {
+
+  winningSquad.forEach(player => {
+    const bat = allBatStats[player] || { runs: 0, fours: 0, sixes: 0, balls: 0 };
+    const bowl = allBowlStats[player] || { wickets: 0, runsConceded: 0, balls: 0 };
+    
+    // Weighted scoring
+    const score = (bat.runs * 1) + 
+                  (bat.fours * 0.5) + 
+                  (bat.sixes * 1) + 
+                  (bowl.wickets * 25) - 
+                  (bowl.runsConceded * 0.2);
+
     if (score > maxScore) {
       maxScore = score;
-      bestPlayer = name;
+      bestPlayer = player;
     }
-  }
+  });
+
   return bestPlayer;
 };

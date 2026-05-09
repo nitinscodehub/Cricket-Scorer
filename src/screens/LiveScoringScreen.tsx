@@ -13,7 +13,11 @@ interface LiveScoringProps {
 }
 
 export const LiveScoringScreen: React.FC<LiveScoringProps> = ({ matchId, onBack, onViewSummary }) => {
-  const { match, loading, addBall, undoLastBall, updateStriker, updateNonStriker, updateBowler } = useScoring(matchId);
+  const { 
+    match, loading, addBall, undoLastBall, 
+    updateStriker, updateNonStriker, updateBowler,
+    startSuperOver 
+  } = useScoring(matchId);
   const [showPlayerModal, setShowPlayerModal] = useState<'striker' | 'nonstriker' | 'bowler' | null>(null);
 
   useEffect(() => {
@@ -28,20 +32,41 @@ export const LiveScoringScreen: React.FC<LiveScoringProps> = ({ matchId, onBack,
 
   if (loading || !match) return <Layout title="Loading..."><div className="p-8 text-center">Initalizing Score Engine...</div></Layout>;
 
-  if (match.status === 'completed') {
+  if (match.status === 'completed' || (match.status as any) === 'tie') {
+    const isTie = (match.status as any) === 'tie';
+
     return (
-        <Layout title="Match Over" showBackButton onBack={onBack}>
+        <Layout title={isTie ? "Match Tied!" : "Match Over"} showBackButton onBack={onBack}>
             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-                <div className="w-20 h-20 bg-neon-accent/10 rounded-full flex items-center justify-center">
-                    <Trophy className="w-10 h-10 text-neon-accent" />
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center ${isTie ? 'bg-orange-500/10' : 'bg-neon-accent/10'}`}>
+                    {isTie ? <AlertCircle className="w-10 h-10 text-orange-500" /> : <Trophy className="w-10 h-10 text-neon-accent" />}
                 </div>
                 <div>
-                    <h2 className="text-3xl font-black neon-text uppercase italic leading-none">{match.winner} wins</h2>
-                    <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em] mt-3">BY {match.margin}</p>
+                    <h2 className="text-3xl font-black neon-text uppercase italic leading-none">
+                        {isTie ? 'Scores Level' : `${match.winner} wins`}
+                    </h2>
+                    <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em] mt-3">
+                        {isTie ? 'Dramatic Finish!' : `BY ${match.margin}`}
+                    </p>
                 </div>
-                <ActionButton onClick={() => onViewSummary(match.id)} className="w-full">
-                    Official Scorecard
-                </ActionButton>
+                
+                <div className="flex flex-col gap-3 w-full max-w-xs">
+                    {isTie && (
+                        <button 
+                            onClick={() => {
+                                if (window.confirm('Start Super Over? This will reset scores for a 1-over showdown.')) {
+                                    startSuperOver();
+                                }
+                            }}
+                            className="btn-primary w-full bg-orange-500 text-black border-orange-500 shadow-lg shadow-orange-500/20"
+                        >
+                            START SUPER OVER
+                        </button>
+                    )}
+                    <ActionButton onClick={() => onViewSummary(match.id)} className="w-full">
+                        Official Scorecard
+                    </ActionButton>
+                </div>
             </div>
         </Layout>
     );

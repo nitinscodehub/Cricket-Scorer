@@ -121,33 +121,26 @@ export const useScoring = (matchId: string | null) => {
         }
     } else if (match.currentInnings === 2) {
         const target = match.innings1.runs + 1;
-        if (updatedInnings.runs >= target || isOversEnd || isAllOut) {
-            updatedMatch.status = 'completed';
-            updatedMatch.endTime = Date.now();
-            
-            if (updatedInnings.runs >= target) {
-                updatedMatch.winner = bat2Name;
-                updatedMatch.margin = `${match.playersPerTeam - updatedInnings.wickets - 1} wickets`;
+        if (updatedInnings.runs >= target || (isOversEnd || isAllOut)) {
+            if (updatedInnings.runs === match.innings1.runs && (isOversEnd || isAllOut)) {
+                // TIE
+                updatedMatch.status = 'tie' as any;
+                updatedMatch.winner = 'Match Tied';
+                updatedMatch.margin = 'Scores Level';
             } else {
-                updatedMatch.winner = bowl1Name;
-                updatedMatch.margin = `${match.innings1.runs - updatedInnings.runs} runs`;
+                updatedMatch.status = 'completed';
+                updatedMatch.endTime = Date.now();
+                
+                if (updatedInnings.runs >= target) {
+                    updatedMatch.winner = bat2Name;
+                    updatedMatch.margin = `${match.playersPerTeam - updatedInnings.wickets - 1} wickets`;
+                } else {
+                    updatedMatch.winner = bowl1Name;
+                    updatedMatch.margin = `${match.innings1.runs - updatedInnings.runs} runs`;
+                }
+
+                updatedMatch.manOfTheMatch = calculateMOM(updatedMatch);
             }
-
-            // Calculate MOTM
-            const allBatStats = { ...match.innings1.battingStats, ...match.innings2.battingStats };
-            const allBowlStats = { ...match.innings1.bowlingStats, ...match.innings2.bowlingStats };
-            let bestScore = -1;
-            let motm = 'N/A';
-
-            Object.values(allBatStats).forEach((s: any) => {
-                const score = s.runs + (s.runs >= 50 ? 25 : 0) + (s.runs >= 100 ? 50 : 0);
-                if (score > bestScore) { bestScore = score; motm = s.id; }
-            });
-            Object.values(allBowlStats).forEach((s: any) => {
-                const score = (s.wickets * 25) + (s.wickets >= 3 ? 25 : 0);
-                if (score > bestScore) { bestScore = score; motm = s.id; }
-            });
-            updatedMatch.manOfTheMatch = motm;
         }
     }
 
@@ -198,5 +191,47 @@ export const useScoring = (matchId: string | null) => {
     });
   }, [match]);
 
-  return { match, loading, addBall, undoLastBall, updateStriker, updateNonStriker, updateBowler };
+  const startSuperOver = useCallback(async () => {
+    if (!match) return;
+    
+    // Determine who batted second in the main match
+    const teamABattsFirst = (match.tossWinner === match.teamAName && match.tossChoice === 'bat') || 
+                            (match.tossWinner === match.teamBName && match.tossChoice === 'bowl');
+    
+    // Team that batted second in main match bats first in Super Over
+    const superBat1Squad = teamABattsFirst ? match.teamBPlayers : match.teamAPlayers;
+    const superBowl1Squad = teamABattsFirst ? match.teamAPlayers : match.teamBPlayers;
+
+    const resetInnings = {
+        runs: 0,
+        wickets: 0,
+        balls: 0,
+        ballsList: [],
+        battingStats: {},
+        bowlingStats: {}
+    };
+
+    const superOverMatch: Match = {
+        ...match,
+        totalOvers: 1, // Super over is 1 over
+        playersPerTeam: 3, // 3 batsmen allowed in super over
+        status: 'ongoing',
+        currentInnings: 1,
+        winner: undefined,
+        margin: undefined,
+        manOfTheMatch: undefined,
+        innings1: { ...resetInnings },
+        innings2: { ...resetInnings },
+        strikerId: superBat1Squad[0],
+        nonStrikerId: superBat1Squad[1],
+        currentBowlerId: superBowl1Squad[0],
+        startTime: Date.now()
+    };
+
+    await saveMatch(superOverMatch);
+    // Force a reload to ensure all live queries and state are fully reset
+    window.location.reload();
+  }, [match]);
+
+  return { match, loading, addBall, undoLastBall, updateStriker, updateNonStriker, updateBowler, startSuperOver };
 };

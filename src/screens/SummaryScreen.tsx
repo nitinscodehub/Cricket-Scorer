@@ -1,8 +1,8 @@
-import React, { useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Layout, ActionButton } from '../components/SharedUI';
 import { useScoring } from '../hooks/useScoring';
 import { formatOver, calculateRR, calculateMOM } from '../logic/cricketUtils';
-import { Share2, Download, Trophy, User } from 'lucide-react';
+import { Share2, Download, Trophy, User, Check, Edit2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -90,9 +90,20 @@ const InningsSummary = ({ teamName, runs, wickets, balls, battingStats, bowlingS
 
 export const SummaryScreen: React.FC<SummaryProps> = ({ matchId, onBack }) => {
     const { match, loading } = useScoring(matchId);
+    const [showEditMOM, setShowEditMOM] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
 
     if (loading || !match) return <Layout title="Loading..."><div className="p-8 text-center">Crunching numbers...</div></Layout>;
+
+    const winningSquad = match.winner === match.teamAName ? match.teamAPlayers : match.teamBPlayers;
+
+    const handleUpdateMOM = async (playerName: string) => {
+        if (!match) return;
+        const { db } = await import('../db/database');
+        await db.matches.update(match.id, { manOfTheMatch: playerName });
+        setShowEditMOM(false);
+        window.location.reload(); // Quick way to refresh for dexie
+    };
 
     const teamABattsFirst = (match.tossWinner === match.teamAName && match.tossChoice === 'bat') || 
                             (match.tossWinner === match.teamBName && match.tossChoice === 'bowl');
@@ -134,18 +145,51 @@ export const SummaryScreen: React.FC<SummaryProps> = ({ matchId, onBack }) => {
                 </div>
 
                 {/* MOM Section */}
-                <div className="glass-card flex items-center justify-between border-[#CCFF00]/10 active-player-highlight">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full border border-[#CCFF00] p-1">
-                            <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center">
-                                <User className="w-5 h-5 text-[#CCFF00]" />
+                <div className="glass-card flex flex-col border-[#CCFF00]/10 active-player-highlight p-0 overflow-hidden">
+                    <div className="flex items-center justify-between p-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full border border-[#CCFF00] p-1">
+                                <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center">
+                                    <User className="w-5 h-5 text-[#CCFF00]" />
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em]">Man of the Match</p>
+                                <p className="text-base font-black uppercase italic tracking-tight">{match.manOfTheMatch || 'N/A'}</p>
                             </div>
                         </div>
-                        <div>
-                            <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em]">Man of the Match</p>
-                            <p className="text-base font-black uppercase italic tracking-tight">{match.manOfTheMatch || 'N/A'}</p>
-                        </div>
+                        {match.winner !== 'Match Tied' && !showEditMOM && (
+                            <button 
+                                onClick={() => setShowEditMOM(true)}
+                                className="p-2 bg-white/5 rounded-full text-white/40 hover:text-[#CCFF00] hover:bg-[#CCFF00]/10 transition-all"
+                            >
+                                <Edit2 className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
+
+                    {showEditMOM && (
+                        <div className="bg-white/5 p-4 border-t border-white/5">
+                            <p className="text-[9px] font-black text-neon-accent uppercase tracking-widest mb-3">Choose from {match.winner}</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                {winningSquad.map((player) => (
+                                    <button 
+                                        key={player}
+                                        onClick={() => handleUpdateMOM(player)}
+                                        className={`p-2 text-[10px] font-black uppercase rounded border transition-all ${match.manOfTheMatch === player ? 'bg-neon-accent text-black border-neon-accent' : 'bg-white/5 text-white/60 border-white/5'}`}
+                                    >
+                                        {player}
+                                    </button>
+                                ))}
+                            </div>
+                            <button 
+                                onClick={() => setShowEditMOM(false)}
+                                className="w-full mt-4 py-2 text-[9px] font-black text-white/30 uppercase tracking-widest border border-white/5 rounded"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Scorecard Sections */}
